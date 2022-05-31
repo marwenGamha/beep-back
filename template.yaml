@@ -1,0 +1,1398 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: "beepMakerCloudFormation template"
+
+Globals:
+  Function:
+    Timeout: 200
+    Environment:
+      Variables:
+        USERS_TABLE: !Ref "users"
+        PROCESSUS_TABLE: !Ref "processus"
+        PAIEMENTS_TABLE: !Ref "paiements"
+        CONFIG_TABLE: !Ref "config"
+        PACKS_TABLE: !Ref "packs"
+        RECLAMATION_TABLE: !Ref "reclamation"
+        CONN_TABLE: !Ref "connectionID"
+        CALLBACK_URL: !Sub '${beepWebSocket}.execute-api.${AWS::Region}.amazonaws.com/Prod'
+        USER_POOL_ID: "eu-west-3_yfwkwmI5E" 
+        USER_POOL_CLIENT_ID: confidentiel
+        BUCKET_NAME: "beepmaker-attachments"
+
+  # Api:
+  #   Cors:
+  #     AllowMethods: "'*'"
+  #     AllowHeaders: "'*'"
+  #     AllowOrigin: "'*'"
+  #     AllowCredentials: "'*'"
+
+Resources:
+
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: beepMaker
+      StageName: Prod
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+      Auth:
+        Authorizers:
+          MyCognitoAuthorizer:
+            UserPoolArn: !GetAtt UserPool.Arn
+
+  BucketBeepMaker:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: beepmaker-attachments
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - PUT
+              - GET
+              - DELETE
+              - POST
+            AllowedOrigins:
+              - "*"
+
+  users:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: users
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: created_date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+        - AttributeName: created_date
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+  processus:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: processus
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  paiements:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: paiements
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+
+
+  packs:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: packs
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  reclamation:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: reclamation
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  config:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: config
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  connectionID:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: connectionID
+      AttributeDefinitions:
+        - AttributeName: connId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: connId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+
+  userFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt lambdaRoles.Arn
+      CodeUri: src/user/
+      Handler: app.lambdaHandler
+      Runtime: nodejs14.x
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: users
+      Events:
+        ApiPost:
+          Type: Api
+          Properties:
+            Path: /users
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
+        ApiDelete:
+          Type: Api
+          Properties:
+            Path: /users/{id}
+            Method: DELETE
+            RestApiId: !Ref ApiGatewayApi
+        ApiDeleteQueue:
+          Type: Api
+          Properties:
+            Path: /users/deletequeue/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        ApiDeleteSubQueue:
+          Type: Api
+          Properties:
+            Path: /users/deletesubqueue/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        ApiGetOne:
+          Type: Api
+          Properties:
+            Path: /users/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        ApiGetsubUserOne:
+          Type: Api
+          Properties:
+            Path: /users/subuser/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        ApiuserById:
+          Type: Api
+          Properties:
+            Path: /users/byid/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        siret:
+          Type: Api
+          Properties:
+            Path: /users/siret
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        ApiGetAll:
+          Type: Api
+          Properties:
+            Path: /users
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        ApiGetAllPromo:
+          Type: Api
+          Properties:
+            Path: /users/promo/all
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        ApiGetAdmin:
+          Type: Api
+          Properties:
+            Path: /users/isadmin/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        ApiGetBlocked:
+          Type: Api
+          Properties:
+            Path: /users/isblocked/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        ApicheckValid:
+          Type: Api
+          Properties:
+            Path: /users/validite/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        ApiUpdateOne:
+          Type: Api
+          Properties:
+            Path: /users/confirmed
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
+        ApiUpdateBloquerByid:
+          Type: Api
+          Properties:
+            Path: /users/bloquer/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        ApiUpdateUnBloquerByid:
+          Type: Api
+          Properties:
+            Path: /users/unbloquer/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        ApiUpdateByid:
+          Type: Api
+          Properties:
+            Path: /users/update/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        ApiUpdateByidSubUser:
+          Type: Api
+          Properties:
+            Path: /users/update/subuser/{id}
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
+        ApiUpdatePay:
+          Type: Api
+          Properties:
+            Path: /users/updatepay/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        ApiUpdatePack:
+          Type: Api
+          Properties:
+            Path: /users/updatepack/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        ApiUpdateQueue:
+          Type: Api
+          Properties:
+            Path: /users/addqueue/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        ApiUpdateSubQueue:
+          Type: Api
+          Properties:
+            Path: /users/addsubqueue/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        ApiSaveDb:
+          Type: Api
+          Properties:
+            Path: /users/savedb/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        ApiDeleteDb:
+          Type: Api
+          Properties:
+            Path: /users/deletedb/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        ApiPresignedUrlPut:
+          Type: Api
+          Properties:
+            Path: /attachments/get_presigned_url
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        updatePack:
+          Type: Api
+          Properties:
+            Path: /packs/update/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        setAddress:
+          Type: Api
+          Properties:
+            Path: /users/address/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        setBiling:
+          Type: Api
+          Properties:
+            Path: /users/biling/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        getAllPack:
+          Type: Api
+          Properties:
+            Path: /packs
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        getPackById:
+          Type: Api
+          Properties:
+            Path: /packs/byid/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        getDash:
+          Type: Api
+          Properties:
+            Path: /users/stripe/history/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        canelSub:
+          Type: Api
+          Properties:
+            Path: /users/stripe/cancelsub/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        updatePay:
+          Type: Api
+          Properties:
+            Path: /users/stripe/updatepay/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        subUpdatePay:
+          Type: Api
+          Properties:
+            Path: /users/stripe/updatesub/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        checkoutSession:
+          Type: Api
+          Properties:
+            Path: /users/checkout/{id}
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
+        reclamationApi:
+          Type: Api
+          Properties:
+            Path: /reclamation/submit
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
+        getAllRecl:
+          Type: Api
+          Properties:
+            Path: /reclamation/all
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        adminCashBack:
+          Type: Api
+          Properties:
+            Path: /admin/cashback
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        CashBack:
+          Type: Api
+          Properties:
+            Path: /users/updatecashback/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        updateQueue:
+          Type: Api
+          Properties:
+            Path: /queue/update/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        updateSubQueue:
+          Type: Api
+          Properties:
+            Path: /user/updatesubqueue/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        webHooks:
+          Type: Api
+          Properties:
+            Path: /stripe/webhook
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
+        queueById:
+          Type: Api
+          Properties:
+            Path: /users/queue/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        checkPromoCode:
+          Type: Api
+          Properties:
+            Path: /users/promocode/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        createPromoCode:
+          Type: Api
+          Properties:
+            Path: /admin/promocode
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
+        ApiPutActivatePromoCode:
+          Type: Api
+          Properties:
+            Path: /admin/promocode/activate/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        ApiPutdeActivatePromoCode:
+          Type: Api
+          Properties:
+            Path: /admin/promocode/deactivate/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        userBroadCast:
+          Type: Api
+          Properties:
+            Path: /superadmin/userbloque/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        userDeleteBroadCast:
+          Type: Api
+          Properties:
+            Path: /superadmin/userdelete/{id}
+            Method: DELETE
+            RestApiId: !Ref ApiGatewayApi
+
+
+
+
+
+
+  userExFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt lambdaRoles.Arn
+      CodeUri: src/userEX/
+      Handler: app.lambdaHandler
+      Runtime: nodejs14.x
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: users
+      Events:
+        checkIban:
+          Type: Api
+          Properties:
+            Path: /users/checkiban/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        ResetBeep:
+          Type: Api
+          Properties:
+            Path: /beep/reset/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        CommercialGetter:
+          Type: Api
+          Properties:
+            Path: /commercial
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        ArrayUpdatePack:
+          Type: Api
+          Properties:
+            Path: /packs/update/array/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        createFilePay:
+          Type: Api
+          Properties:
+            Path: /admin/createpay
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
+        updatePay:
+          Type: Api
+          Properties:
+            Path: /user/demandepay/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        usersOnePayData:
+          Type: Api
+          Properties:
+            Path: /users/pay/data/{id}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        openPayData:
+          Type: Api
+          Properties:
+            Path: /users/openpay
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        updatePayData:
+          Type: Api
+          Properties:
+            Path: /admin/updatepay/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+        ApiPresignedUrlPut:
+            Type: Api
+            Properties:
+              Path: /payattachments/get_presigned_url
+              Method: PUT
+              RestApiId: !Ref ApiGatewayApi
+        closePayFile:
+            Type: Api
+            Properties:
+              Path: /admin/closepay/{id}
+              Method: GET
+              RestApiId: !Ref ApiGatewayApi
+        cleanIban:
+            Type: Api
+            Properties:
+              Path: /users/iban/{id}
+              Method: GET
+              RestApiId: !Ref ApiGatewayApi
+        getterMinpay:
+            Type: Api
+            Properties:
+              Path: /admin/getminpay
+              Method: GET
+              RestApiId: !Ref ApiGatewayApi
+        setterPay:
+            Type: Api
+            Properties:
+              Path: /admin/setmainpay/{id}
+              Method: GET
+              RestApiId: !Ref ApiGatewayApi
+        updateBil:
+            Type: Api
+            Properties:
+              Path: /admin/updatebiling/{id}
+              Method: PUT
+              RestApiId: !Ref ApiGatewayApi
+        deleteBil:
+            Type: Api
+            Properties:
+              Path: /admin/deletebiling/{id}
+              Method: PUT
+              RestApiId: !Ref ApiGatewayApi
+        getListBillInfo:
+            Type: Api
+            Properties:
+              Path: /users/bilingInfo/{id}
+              Method: GET
+              RestApiId: !Ref ApiGatewayApi
+        GetClosedPay:
+          Type: Api
+          Properties:
+            Path: /admin/closedpay
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+        updateBill:
+          Type: Api
+          Properties:
+            Path: /admin/idupdatebiling/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGatewayApi
+
+
+  resetTriggerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt lambdaRoles.Arn
+      CodeUri: src/reset/
+      Handler: app.lambdaHandler
+      Runtime: nodejs14.x
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: users      
+        -  DynamoDBCrudPolicy:
+            TableName: connectionID
+      Events:
+        resetCounter:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 0 * * ? *)
+
+
+
+  customFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt customEmailRole.Arn
+      CodeUri: src/custom/
+      Handler: app.lambdaHandler
+      Runtime: nodejs14.x
+
+   
+
+
+  lambdaRoles:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: ${AWS::StackName}-Lambda-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: lambdaUserRole
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                  - cognito-idp:*
+                  - dynamodb:*
+                  - s3:DeleteObject
+                  - s3:PutObject
+                  - s3:GetObject
+                  - execute-api:Invoke
+         
+                Resource: "*"
+
+  customEmailRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: ${AWS::StackName}-customEmailSender-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: lambdaUserRole
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*  
+                Resource: "*"
+
+
+
+#########################################webSokeet
+
+   # connection function
+  wsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/ws
+      Handler: app.lambdaHandler
+      MemorySize: 256
+      Runtime: nodejs14.x
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName: users      
+      -  DynamoDBCrudPolicy:
+          TableName: connectionID
+      - Statement:
+        - Effect: Allow
+          Action:
+          - 'execute-api:ManageConnections'
+          Resource:
+          - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${beepWebSocket}/*' 
+
+
+  OnConnectPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - beepWebSocket
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref wsFunction
+      Principal: apigateway.amazonaws.com
+
+
+
+
+
+
+
+
+
+#########################"websoket"
+
+
+  # Socket Def
+  beepWebSocket:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+     Name: beepWebSocket  
+     ProtocolType: WEBSOCKET
+     RouteSelectionExpression: "$request.body.action"
+
+
+#  connection route---------------
+  ConnectRoute: 
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: $connect
+      AuthorizationType: NONE
+      OperationName: connectionRoute
+      Target: !Join
+      - '/'
+      - - 'integrations'
+        - !Ref ConnectionInteg
+  
+  ConnectionInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: connect Intergration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations  
+
+
+
+# disconnect route----------------
+  DisConnectRoute: 
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      OperationName: disconnectionRoute
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref DisConnectionInteg
+  
+  DisConnectionInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: Disconnect Intergration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations  
+# ---------------------------------
+
+# default route----------------
+  defaultRoute: 
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: $default
+      AuthorizationType: NONE
+      OperationName: defaultRoute
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref defaultInteg
+  
+  defaultInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: default Intergration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations  
+# ---------------------------------
+
+
+
+# auth----------------
+  authRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: auth  
+      AuthorizationType: NONE
+      OperationName: auth
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref authInteg
+  authInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: auth Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri: 
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations  
+
+# ---------------------------------
+
+
+
+# call
+# 
+
+  callRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: call
+      AuthorizationType: NONE
+      OperationName: call
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref callInteg
+
+  
+
+# 
+  callInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: call Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations    
+
+
+
+
+
+# continouscall
+# 
+
+  continouscallRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: continouscall
+      AuthorizationType: NONE
+      OperationName: continouscall
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref continouscallInteg
+
+  
+
+# 
+  continouscallInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: continouscall Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations   
+
+
+
+# uncontinouscall
+# 
+
+  uncontinouscallRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: uncontinouscall
+      AuthorizationType: NONE
+      OperationName: uncontinouscall
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref uncontinouscallInteg
+
+  
+
+# 
+  uncontinouscallInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: uncontinouscall Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations    
+
+
+
+
+
+
+# stopcontinouscall
+# 
+
+  stopcontinouscallRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: stopcontinouscall
+      AuthorizationType: NONE
+      OperationName: stopcontinouscall
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref stopcontinouscallInteg
+
+  
+
+# 
+  stopcontinouscallInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: stopcontinouscall Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations   
+
+
+
+# set
+# 
+
+  setRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: set
+      AuthorizationType: NONE
+      OperationName: set
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref setInteg
+
+  
+
+# 
+  setInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: set Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations   
+
+
+# reset
+# 
+
+  resetRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: reset
+      AuthorizationType: NONE
+      OperationName: reset
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref resetInteg
+
+  
+
+# 
+  resetInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: reset Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations    
+
+
+
+
+# ping
+# 
+
+  pingRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: ping
+      AuthorizationType: NONE
+      OperationName: ping
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref pingInteg
+
+  
+
+# 
+  pingInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: ping Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations   
+
+
+
+
+
+# pingenduser
+# 
+
+  pingEndUserRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: pingenduser
+      AuthorizationType: NONE
+      OperationName: pingenduser
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref pingenduserInteg
+
+  
+
+# 
+  pingenduserInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: pingenduser Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations   
+
+
+
+
+# ---------------------------------
+# confirm route
+# 
+
+  confirmRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: confirm
+      AuthorizationType: NONE
+      OperationName: confirm
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref confirmInteg
+
+  
+
+# 
+  confirmInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: confirm Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations   
+
+
+# ---------------------------------
+# specialconfirm route
+# 
+
+  specialconfirmRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: specialconfirm
+      AuthorizationType: NONE
+      OperationName: specialconfirm
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref specialconfirmInteg
+
+  
+
+# 
+  specialconfirmInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: specialconfirm Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations   
+
+
+# ---------------------------------
+# delete route
+# 
+
+  deleteRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: delete
+      AuthorizationType: NONE
+      OperationName: delete
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref deleteInteg
+
+  
+
+# 
+  deleteInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: delete Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations  
+
+
+# ---------------------------------
+# deleteenduser route
+# 
+
+  deleteEndUserRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: deleteenduser
+      AuthorizationType: NONE
+      OperationName: deleteenduser
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref deleteenduserInteg
+
+  
+
+# 
+  deleteenduserInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: deleteenduser Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations   
+
+
+# ---------------------------------
+
+# ---------------------------------
+# addNote route
+# 
+
+  addnoteRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: note
+      AuthorizationType: NONE
+      OperationName: note
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref noteInteg
+
+  
+
+# 
+  noteInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: note Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations    
+
+
+# ---------------------------------
+# ---------------------------------
+# getterQueue route
+# 
+
+  getterqueueRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: getterqueue
+      AuthorizationType: NONE
+      OperationName: note
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref getterqueueInteg
+
+  
+
+# 
+  getterqueueInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: getterqueue Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations   
+
+
+# ---------------------------------
+# ---------------------------------
+# getterSubQueue route
+# 
+
+  gettersubqueueRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref beepWebSocket
+      RouteKey: gettersubqueue
+      AuthorizationType: NONE
+      OperationName: note
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref gettersubqueueInteg
+
+  
+
+# 
+  gettersubqueueInteg: 
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref beepWebSocket
+      Description: gettersubqueue Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wsFunction.Arn}/invocations   
+
+
+# ---------------------------------
+            
+
+  Deployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - authRoute
+      - callRoute
+      - continouscallRoute
+      - uncontinouscallRoute
+      - stopcontinouscallRoute
+      - setRoute
+      - resetRoute
+      - pingRoute
+      - pingEndUserRoute
+      - confirmRoute
+      - specialconfirmRoute
+      - deleteRoute
+      - deleteEndUserRoute
+      - addnoteRoute
+      - getterqueueRoute
+      - gettersubqueueRoute
+    Properties:
+      ApiId: !Ref beepWebSocket
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      StageName: Prod
+      Description: Prod Stage
+      DeploymentId: !Ref Deployment
+      ApiId: !Ref beepWebSocket
+      
+
+
+# _--------------------------------
+
+
+
+#################################cognito
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName:
+        Fn::Sub: ${AWS::StackName}-user-pool
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 6
+          RequireLowercase: True
+          RequireNumbers: True
+          RequireSymbols: False
+          RequireUppercase: True
+          TemporaryPasswordValidityDays: 7
+      AutoVerifiedAttributes:
+        - email
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: false
+          Required: true
+      UsernameAttributes:
+        - email
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub ${AWS::StackName}-client
+      GenerateSecret: false
+      UserPoolId: !Ref UserPool
+
+  UserPoolGroupSuperAdmin:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      Description: String
+      GroupName: superAdmin
+      UserPoolId: !Ref UserPool
+
+  UserPoolGroupAdmin:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      Description: String
+      GroupName: admin
+      UserPoolId: !Ref UserPool
+
+  UserPoolGroupCommercial:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      Description: String
+      GroupName: commercial
+      UserPoolId: !Ref UserPool
+
+  UserPoolGroupUser:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      Description: String
+      GroupName: user
+      UserPoolId: !Ref UserPool
+
